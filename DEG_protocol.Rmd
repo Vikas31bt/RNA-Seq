@@ -1,0 +1,217 @@
+---
+title: "Differential_expression_analysis"
+author: "Vikas, Lana, Haley and Gurbir"
+date: " 04-11-2023"
+output:
+  pdf_document: default
+  html_document: default
+---
+6. Load relevant R packages. These include the Ballgown package that we are using for performing most of the analyses.
+
+```{r}
+library(ballgown)
+library(ggplot2)
+library(RSkittleBrewer)
+library(genefilter)
+library(dplyr)
+library(devtools)
+library (cowplot)
+library(pheatmap)
+
+```
+
+7. Load the phenotype data for the samples.
+
+
+```{r cars}
+# Make sure to chnage the path to 'D:/NGS/chrX_data' where file is located
+setwd('D:/NGS/chrX_data')
+
+# Set colClasses to "character" to treat all columns as character types
+geuvadis_phenodata <- read.table("geuvadis_phenodata.csv", header = TRUE, sep = ",", colClasses = "character")
+
+# View the class of the resulting data frame
+class(geuvadis_phenodata)
+
+```
+
+8. Read in the expression data that were calculated by StringTie. 
+
+```{r}
+# Make sure geuvadis_phenodata is a valid data frame, Convert it to a data frame if needed
+geuvadis_phenodata <- as.data.frame(geuvadis_phenodata)
+
+# Create ballgown object
+bg_chrX = ballgown(dataDir = "ballgown", samplePattern = "ERR", pData = geuvadis_phenodata)
+
+
+```
+
+9. Filter to remove low-abundance genes. 
+```{r}
+# Filter genes in bg_chrX with row-wise variance greater than 1
+bg_chrX_filt <- subset(bg_chrX, "rowVars(texpr(bg_chrX)) > 1", genomesubset = TRUE)
+
+```
+
+10. Identify transcripts that show statistically significant differences between groups. 
+
+```{r}
+# Perform differential expression analysis on transcripts, testing for the effect of 'sex' with adjustment for 'population'
+results_transcripts = stattest(bg_chrX_filt, feature = "transcript", covariate = "sex", adjustvars = c("population"), getFC = TRUE, meas = "FPKM")
+
+```
+
+11. Identify genes that show statistically significant differences between groups. 
+
+```{r}
+# Perform differential expression analysis on genes
+results_genes = stattest(bg_chrX_filt, feature = "gene", covariate = "sex", adjustvars = c("population"), getFC = TRUE, meas = "FPKM")
+
+```
+
+
+```{r}
+# Create a volcano plot for all genes
+ggplot(results_genes, aes(x = log2(fc), y = -log10(pval))) +
+  geom_point(size = 3) +
+  labs(title = "Volcano Plot", x = "Log2 Fold Change", y = "-Log10 p-value")
+```
+
+```{r}
+# Create a volcano plot with overexpression and underexpression color-coding
+ggplot(results_genes, aes(x = log2(fc), y = -log10(pval))) +
+  geom_point(aes(color = ifelse(qval > 0.05, "Non-Significant", ifelse(fc > 0, "Overexpressed", "Underexpressed"))), size = 3) +
+  scale_color_manual(values = c("black", "red", "blue")) +
+  labs(title = "Volcano Plot", x = "Log2 Fold Change", y = "-Log10 p-value")
+```
+
+
+
+```{r}
+# Create a volcano plot
+ggplot(results_genes, aes(x = log2(fc), y = -log10(pval))) +
+  geom_point(aes(color = qval > 0.05), size = 3) +  # Color points based on q-value significance
+  scale_color_manual(values = c("black", "red")) +  # Set colors for non-significant (black) and significant (red) points
+  labs(title = "Volcano Plot", x = "Log2 Fold Change", y = "-Log10 p-value")
+```
+```{r}
+# Selecting relevant columns for the heat map
+heatmap_data <- results_genes[, c("fc", "pval", "qval")]
+
+# Create a heat map
+pheatmap(heatmap_data)
+
+```
+
+
+12. Add gene names and gene IDs to the results_transcripts data frame:
+```{r}
+# Combine results of transcript-level differential expression analysis with gene names and IDs
+results_transcripts = data.frame(
+  geneNames = ballgown::geneNames(bg_chrX_filt),
+  geneIDs = ballgown::geneIDs(bg_chrX_filt),
+  results_transcripts
+)
+
+```
+
+13. Sort the results from the smallest P value to the largest.
+
+```{r}
+# Arrange results_transcripts and results_genes data frames based on p-value
+results_transcripts = arrange(results_transcripts, pval)
+results_genes = arrange(results_genes, pval)
+
+```
+
+14. Write the results to a csv file that can be shared and distributed.
+
+```{r}
+# Write transcript-level results to a CSV file
+write.csv(results_transcripts, "chrX_transcript_results.csv", row.names = FALSE)
+
+# Write gene-level results to a CSV file
+write.csv(results_genes, "chrX_gene_results.csv", row.names = FALSE)
+
+```
+
+15. Identify transcripts and genes with a q value <0.05:
+
+```{r}
+# Subset transcript-level results with q-value < 0.05
+subset_transcripts = subset(results_transcripts, qval < 0.05)
+
+# Subset gene-level results with q-value < 0.05
+subset_genes = subset(results_genes, qval < 0.05)
+
+# Write transcript-level results to a CSV file
+write.csv(subset_transcripts, "DET_transcript_results.csv", row.names = FALSE)
+
+# Write gene-level results to a CSV file
+write.csv(subset_genes, "DEG_gene_results.csv", row.names = FALSE)
+
+```
+
+`Chromosome X has 12 transcripts that are differentially expressed between the sexes (using a q value threshold of 0.05), four of which correspond to isoforms of known genes (XIST, KDM6A, TSIX, PNPLA4 and RPS4X). At the gene level, chromosome X has 7 differentially expressed genes at the same q value cutoff.` 
+
+16. Make the plots pretty.
+
+```{r}
+# Define a tropical color palette
+tropical = c('darkorange', 'dodgerblue', 'hotpink', 'limegreen', 'yellow')
+
+# Set the color palette for plots
+palette(tropical)
+
+```
+
+18. Show the distribution of gene abundances (measured as FPKM values) across samples after normalization.
+
+
+```{r}
+# Extract FPKM values from ballgown object
+fpkm = texpr(bg_chrX, meas = "FPKM")
+
+# Log2 transformation of FPKM values
+fpkm = log2(fpkm + 1)
+
+# Create a boxplot with colors representing different sexes
+Figure_3 <- boxplot(fpkm, col = as.numeric(geuvadis_phenodata$sex), las = 2, ylab = 'log2(FPKM+1)')
+
+# Save the base R boxplot as a figure
+dev.copy(png, "Distribution of FPKM values across the 12 samples.png")
+dev.off()
+
+```
+
+19. Create a histogram for gene and transcript level P values to check the distribution of data
+
+
+```{r}
+# Create a histogram for gene-level P values
+histogram_gene <- ggplot(results_genes) +
+  geom_histogram(aes(x = pval), bins = 30, fill = "green", color = "black", alpha = 0.7) +
+  labs(title = "Gene-level P values", x = "P values") +
+  theme(text = element_text(size = 14),  # Adjust the base font size
+        axis.title.x = element_text(size = 16),  # Adjust x-axis title font size
+        plot.title = element_text(size = 18))  # Adjust plot title font size
+
+# Create a histogram for transcript-level P values
+histogram_transcript <- ggplot(results_transcripts) +
+  geom_histogram(aes(x = results_transcripts$pval), bins = 30, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Transcript-level P values", x = "P values") +
+  theme(text = element_text(size = 14),  # Adjust the base font size
+        axis.title.x = element_text(size = 16),  # Adjust x-axis title font size
+        plot.title = element_text(size = 18))  # Adjust plot title font size
+
+# Combine the histograms into one plot
+Figure_6 <- plot_grid(histogram_transcript, histogram_gene, labels = c("A", "B"))
+
+# Save the plot with adjusted font sizes
+ggsave(filename = "Overall distribution of differential expression P values in females and males.png", plot = Figure_6, height = 6, width = 8)
+
+Figure_6
+
+```
+
