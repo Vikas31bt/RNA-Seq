@@ -2,8 +2,8 @@
 
 ##########################################################
 # Genome Analysis Script for Breast Cancer Research
-# Author: Vikas Kaushik and Sessane Million
-# Date: 04/11/2023
+# Author: Vikas Kaushik
+# Date: 2023
 # Description: This script performs various analyses including FastQC, HISAT2 alignment, variant calling, 
 # normalization, and variant comparison between test and control samples (Breast Cancer).
 ##########################################################
