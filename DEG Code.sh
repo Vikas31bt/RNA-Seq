@@ -3,7 +3,7 @@
 ##########################################################
 # Transcriptome Analysis Script for Diffenrial gene regulation Research
 # Author: Vikas
-# Date: 22/11/2023
+# Date: 2023
 # Description: This script performs DGE analyses including FastQC, HISAT2 alignment, stringtie assembly and abundance  
 # for comparison between male and female samples from two geographcal distict population.
 ##########################################################
